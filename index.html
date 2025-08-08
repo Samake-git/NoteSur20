@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Gestion des Notes sur 20 - Version Avancée</title>
+    <meta charset="UTF-8" />
+    <title>Gestion des Notes sur 20 - Version Complète</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body {
@@ -40,7 +40,9 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            width: 100%;
+            width: 48%;
+            margin: 0 1% 10px 1%;
+            box-sizing: border-box;
         }
         button:hover {
             background: #218838;
@@ -76,180 +78,241 @@
             width: 100%;
             border: 1px solid #ccc;
             border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .buttons-container {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Gestion des Notes sur 20 - Version Avancée</h2>
+<div class="container">
+    <h2>Gestion des Notes sur 20 - Version Complète</h2>
 
-        <!-- Zone d'erreur -->
-        <div id="errorMessage" class="error"></div>
+    <div id="errorMessage" class="error"></div>
 
-        <!-- Upload fichier Excel -->
-        <label>Importer la liste des étudiants (Excel) :</label>
-        <input type="file" id="fileInput" accept=".xlsx, .xls">
+    <label>Importer la liste des étudiants (Excel) :</label>
+    <input type="file" id="fileInput" accept=".xlsx, .xls" />
 
-        <!-- Barre de recherche -->
-        <label>Rechercher :</label>
-        <input type="text" id="searchInput" placeholder="Chercher par nom, prénom ou matricule">
+    <label>Rechercher :</label>
+    <input type="text" id="searchInput" placeholder="Chercher par nom, prénom ou matricule" />
 
-        <!-- Formulaire pour ajouter une note -->
-        <label>Étudiant :</label>
-        <select id="studentSelect"></select>
+    <label>Étudiant :</label>
+    <select id="studentSelect"></select>
 
-        <label>Pourcentage de l'épreuve (%) :</label>
-        <input type="number" id="pourcentage" placeholder="Ex: 30" min="1" max="100">
+    <label>Pourcentage de l'épreuve (%) :</label>
+    <input type="number" id="pourcentage" placeholder="Ex: 30" min="1" max="100" />
 
-        <label>Note obtenue :</label>
-        <input type="number" id="note" placeholder="Ex: 25" min="0">
+    <label>Note obtenue :</label>
+    <input type="number" id="note" placeholder="Ex: 25" min="0" />
 
-        <button onclick="ajouterNote()">Ajouter la note</button>
+    <button onclick="ajouterNote()">Ajouter la note</button>
 
-        <!-- Tableau des étudiants -->
-        <table id="studentTable">
-            <thead>
-                <tr>
-                    <th onclick="trierTableau('matricule')">Matricule</th>
-                    <th onclick="trierTableau('nomPrenom')">Nom & Prénom</th>
-                    <th onclick="trierTableau('noteSur20')">Note sur 20</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+    <div class="buttons-container">
+        <button onclick="exporterCSV()">Exporter CSV</button>
+        <button onclick="exporterExcel()">Exporter Excel</button>
     </div>
 
-    <script>
-        let etudiants = [];
-        let triAsc = { matricule: true, nomPrenom: true, noteSur20: true };
+    <table id="studentTable">
+        <thead>
+            <tr>
+                <th onclick="trierTableau('matricule')">Matricule</th>
+                <th onclick="trierTableau('nomPrenom')">Nom & Prénom</th>
+                <th onclick="trierTableau('noteSur20')">Note sur 20</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
 
-        // Charger depuis le localStorage au démarrage
-        window.onload = function() {
-            let savedData = localStorage.getItem("etudiants");
-            if (savedData) {
-                etudiants = JSON.parse(savedData);
-                afficherEtudiants();
-                remplirSelect();
+<script>
+    let etudiants = [];
+    let triAsc = { matricule: true, nomPrenom: true, noteSur20: true };
+
+    // Charger depuis localStorage au démarrage
+    window.onload = function () {
+        let savedData = localStorage.getItem("etudiants");
+        if (savedData) {
+            etudiants = JSON.parse(savedData);
+            afficherEtudiants();
+            remplirSelect();
+        }
+    };
+
+    // Lecture du fichier Excel avec vérification
+    document.getElementById("fileInput").addEventListener("change", function (e) {
+        let file = e.target.files[0];
+        if (!file) return;
+
+        let reader = new FileReader();
+        reader.onload = function (e) {
+            let data = new Uint8Array(e.target.result);
+            let workbook = XLSX.read(data, { type: "array" });
+            let sheet = workbook.Sheets[workbook.SheetNames[0]];
+            let jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+            let headers = jsonData[0];
+            if (!headers || headers.length < 2) {
+                afficherErreur(
+                    "Le fichier doit contenir au moins deux colonnes : Matricule et Nom & Prénom."
+                );
+                return;
             }
-        };
-
-        // Lecture du fichier Excel avec vérification
-        document.getElementById("fileInput").addEventListener("change", function(e) {
-            let file = e.target.files[0];
-            if (!file) return;
-
-            let reader = new FileReader();
-            reader.onload = function(e) {
-                let data = new Uint8Array(e.target.result);
-                let workbook = XLSX.read(data, {type: 'array'});
-                let sheet = workbook.Sheets[workbook.SheetNames[0]];
-                let jsonData = XLSX.utils.sheet_to_json(sheet, {header: 1});
-
-                let headers = jsonData[0];
-                if (!headers || headers.length < 2) {
-                    afficherErreur("Le fichier doit contenir au moins deux colonnes : Matricule et Nom & Prénom.");
-                    return;
-                }
-                if (!headers[0].toString().toLowerCase().includes("matricule") || 
-                    !headers[1].toString().toLowerCase().includes("nom")) {
-                    afficherErreur("Le fichier doit avoir 'Matricule' en première colonne et 'Nom & Prénom' en deuxième colonne.");
-                    return;
-                }
-
-                afficherErreur("");
-                etudiants = [];
-                for (let i = 1; i < jsonData.length; i++) {
-                    let row = jsonData[i];
-                    if (row.length >= 2 && row[0] && row[1]) {
-                        etudiants.push({
-                            matricule: row[0].toString(),
-                            nomPrenom: row[1].toString(),
-                            noteSur20: ""
-                        });
-                    }
-                }
-
-                sauvegarderLocalStorage();
-                afficherEtudiants();
-                remplirSelect();
-            };
-            reader.readAsArrayBuffer(file);
-        });
-
-        // Afficher message d'erreur
-        function afficherErreur(message) {
-            document.getElementById("errorMessage").textContent = message;
-        }
-
-        // Sauvegarder dans le localStorage
-        function sauvegarderLocalStorage() {
-            localStorage.setItem("etudiants", JSON.stringify(etudiants));
-        }
-
-        // Afficher dans le tableau avec recherche
-        function afficherEtudiants() {
-            let recherche = document.getElementById("searchInput").value.toLowerCase();
-            let tbody = document.querySelector("#studentTable tbody");
-            tbody.innerHTML = "";
-            etudiants
-                .filter(e => e.matricule.toLowerCase().includes(recherche) || 
-                             e.nomPrenom.toLowerCase().includes(recherche))
-                .forEach(etudiant => {
-                    let tr = `<tr>
-                        <td>${etudiant.matricule}</td>
-                        <td>${etudiant.nomPrenom}</td>
-                        <td>${etudiant.noteSur20}</td>
-                    </tr>`;
-                    tbody.innerHTML += tr;
-                });
-        }
-
-        // Remplir le select
-        function remplirSelect() {
-            let select = document.getElementById("studentSelect");
-            select.innerHTML = "";
-            etudiants.forEach((etudiant, index) => {
-                let option = document.createElement("option");
-                option.value = index;
-                option.textContent = `${etudiant.nomPrenom} (${etudiant.matricule})`;
-                select.appendChild(option);
-            });
-        }
-
-        // Ajouter une note calculée
-        function ajouterNote() {
-            let index = document.getElementById("studentSelect").value;
-            let pourcentage = parseFloat(document.getElementById("pourcentage").value);
-            let note = parseFloat(document.getElementById("note").value);
-
-            if (isNaN(pourcentage) || isNaN(note) || pourcentage <= 0) {
-                alert("⚠️ Veuillez entrer des valeurs valides.");
+            if (
+                !headers[0].toString().toLowerCase().includes("matricule") ||
+                !headers[1].toString().toLowerCase().includes("nom")
+            ) {
+                afficherErreur(
+                    "Le fichier doit avoir 'Matricule' en première colonne et 'Nom & Prénom' en deuxième colonne."
+                );
                 return;
             }
 
-            let noteSur20 = (note * 20) / pourcentage;
-            etudiants[index].noteSur20 = noteSur20.toFixed(2);
+            afficherErreur("");
+            etudiants = [];
+            for (let i = 1; i < jsonData.length; i++) {
+                let row = jsonData[i];
+                if (row.length >= 2 && row[0] && row[1]) {
+                    etudiants.push({
+                        matricule: row[0].toString(),
+                        nomPrenom: row[1].toString(),
+                        noteSur20: "",
+                    });
+                }
+            }
 
             sauvegarderLocalStorage();
             afficherEtudiants();
-        }
+            remplirSelect();
+        };
+        reader.readAsArrayBuffer(file);
+    });
 
-        // Trier le tableau
-        function trierTableau(cle) {
-            etudiants.sort((a, b) => {
-                if (cle === "noteSur20") {
-                    return triAsc[cle] ? a[cle] - b[cle] : b[cle] - a[cle];
-                }
-                return triAsc[cle] 
-                    ? a[cle].toString().localeCompare(b[cle].toString()) 
-                    : b[cle].toString().localeCompare(a[cle].toString());
+    // Afficher message d'erreur
+    function afficherErreur(message) {
+        document.getElementById("errorMessage").textContent = message;
+    }
+
+    // Sauvegarder dans le localStorage
+    function sauvegarderLocalStorage() {
+        localStorage.setItem("etudiants", JSON.stringify(etudiants));
+    }
+
+    // Afficher dans le tableau avec recherche
+    function afficherEtudiants() {
+        let recherche = document.getElementById("searchInput").value.toLowerCase();
+        let tbody = document.querySelector("#studentTable tbody");
+        tbody.innerHTML = "";
+        etudiants
+            .filter(
+                (e) =>
+                    e.matricule.toLowerCase().includes(recherche) ||
+                    e.nomPrenom.toLowerCase().includes(recherche)
+            )
+            .forEach((etudiant) => {
+                let tr = `<tr>
+                    <td>${etudiant.matricule}</td>
+                    <td>${etudiant.nomPrenom}</td>
+                    <td>${etudiant.noteSur20}</td>
+                </tr>`;
+                tbody.innerHTML += tr;
             });
-            triAsc[cle] = !triAsc[cle];
-            afficherEtudiants();
+    }
+
+    // Remplir le select
+    function remplirSelect() {
+        let select = document.getElementById("studentSelect");
+        select.innerHTML = "";
+        etudiants.forEach((etudiant, index) => {
+            let option = document.createElement("option");
+            option.value = index;
+            option.textContent = `${etudiant.nomPrenom} (${etudiant.matricule})`;
+            select.appendChild(option);
+        });
+    }
+
+    // Ajouter une note calculée
+    function ajouterNote() {
+        let index = document.getElementById("studentSelect").value;
+        let pourcentage = parseFloat(document.getElementById("pourcentage").value);
+        let note = parseFloat(document.getElementById("note").value);
+
+        if (isNaN(pourcentage) || isNaN(note) || pourcentage <= 0) {
+            alert("⚠️ Veuillez entrer des valeurs valides.");
+            return;
         }
 
-        // Recherche dynamique
-        document.getElementById("searchInput").addEventListener("input", afficherEtudiants);
-    </script>
+        let noteSur20 = (note * 20) / pourcentage;
+        etudiants[index].noteSur20 = noteSur20.toFixed(2);
+
+        sauvegarderLocalStorage();
+        afficherEtudiants();
+    }
+
+    // Trier le tableau
+    function trierTableau(cle) {
+        etudiants.sort((a, b) => {
+            if (cle === "noteSur20") {
+                return triAsc[cle] ? a[cle] - b[cle] : b[cle] - a[cle];
+            }
+            return triAsc[cle]
+                ? a[cle].toString().localeCompare(b[cle].toString())
+                : b[cle].toString().localeCompare(a[cle].toString());
+        });
+        triAsc[cle] = !triAsc[cle];
+        afficherEtudiants();
+    }
+
+    // Recherche dynamique
+    document
+        .getElementById("searchInput")
+        .addEventListener("input", afficherEtudiants);
+
+    // Exporter CSV (optionnel, si tu veux aussi)
+    function exporterCSV() {
+        if (etudiants.length === 0) {
+            alert("Aucun étudiant à exporter !");
+            return;
+        }
+
+        let csv = "Matricule,Nom & Prénom,Note sur 20\n";
+        etudiants.forEach((e) => {
+            let nom = e.nomPrenom.replace(/"/g, '""');
+            csv += `"${e.matricule}","${nom}","${e.noteSur20}"\n`;
+        });
+
+        let blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+        let url = URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = "notes_etudiants.csv";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // Exporter Excel avec SheetJS
+    function exporterExcel() {
+        if (etudiants.length === 0) {
+            alert("Aucun étudiant à exporter !");
+            return;
+        }
+
+        let ws_data = [
+            ["Matricule", "Nom & Prénom", "Note sur 20"],
+            ...etudiants.map((e) => [e.matricule, e.nomPrenom, e.noteSur20]),
+        ];
+
+        let wb = XLSX.utils.book_new();
+        let ws = XLSX.utils.aoa_to_sheet(ws_data);
+        XLSX.utils.book_append_sheet(wb, ws, "Notes");
+
+        XLSX.writeFile(wb, "notes_etudiants.xlsx");
+    }
+</script>
 </body>
 </html>
